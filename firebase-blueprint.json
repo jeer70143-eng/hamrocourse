@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "purchasedCourses": { "type": "array", "items": { "type": "string" } },
+        "progress": {
+          "type": "object",
+          "description": "User's progress in each course"
+        }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "A course available for purchase",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "instructor": { "type": "string" },
+        "price": { "type": "number" },
+        "rating": { "type": "number" },
+        "thumbnail": { "type": "string", "format": "uri" },
+        "category": { "type": "string" },
+        "duration": { "type": "string" },
+        "lessonsCount": { "type": "integer" }
+      },
+      "required": ["id", "title", "instructor", "price"]
+    },
+    "Lesson": {
+      "title": "Lesson",
+      "description": "A single lesson within a course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "title": { "type": "string" },
+        "duration": { "type": "string" },
+        "videoUrl": { "type": "string", "format": "uri" },
+        "isPremium": { "type": "boolean" },
+        "order": { "type": "integer" }
+      },
+      "required": ["id", "courseId", "title", "videoUrl"]
+    },
+    "Purchase": {
+      "title": "Purchase",
+      "description": "A record of a course purchase",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["completed", "failed", "pending"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "courseId", "amount", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/courses/{courseId}": {
+      "schema": "Course",
+      "description": "Course information"
+    },
+    "/courses/{courseId}/lessons/{lessonId}": {
+      "schema": "Lesson",
+      "description": "Lessons within a course"
+    },
+    "/purchases/{purchaseId}": {
+      "schema": "Purchase",
+      "description": "Purchase records"
+    }
+  }
+}

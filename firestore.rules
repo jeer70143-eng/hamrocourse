@@ -1,0 +1,150 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: uid
+// Fields:
+//   - uid: string (required, immutable)
+//   - name: string (optional)
+//   - email: string (required, format: email)
+//   - role: string (required, enum: ['user', 'admin'])
+//   - purchasedCourses: list (optional, items: courseId)
+//   - progress: map (optional)
+//
+// Collection: courses
+// Document ID: courseId
+// Fields:
+//   - id: string (required)
+//   - title: string (required)
+//   - description: string (required)
+//   - instructor: string (required)
+//   - price: number (required)
+//   - rating: number (optional)
+//   - thumbnail: string (required, format: uri)
+//   - category: string (optional)
+//   - duration: string (optional)
+//   - lessonsCount: number (optional)
+//
+// Collection: courses/{courseId}/lessons
+// Document ID: lessonId
+// Fields:
+//   - id: string (required)
+//   - courseId: string (required)
+//   - title: string (required)
+//   - duration: string (optional)
+//   - videoUrl: string (required, format: uri)
+//   - isPremium: bool (required)
+//   - order: number (required)
+//
+// Collection: purchases
+// Document ID: purchaseId
+// Fields:
+//   - id: string (required)
+//   - userId: string (required)
+//   - courseId: string (required)
+//   - amount: number (required)
+//   - status: string (required, enum: ['completed', 'failed', 'pending'])
+//   - createdAt: timestamp (required)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "jeer70143@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'name', 'email', 'role', 'purchasedCourses', 'progress']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.role in ['user', 'admin'];
+    }
+
+    function isValidCourse(data) {
+      return hasRequiredFields(['id', 'title', 'description', 'instructor', 'price', 'thumbnail']) &&
+             data.price >= 0 &&
+             isValidUrl(data.thumbnail);
+    }
+
+    function isValidLesson(data) {
+      return hasRequiredFields(['id', 'courseId', 'title', 'videoUrl', 'isPremium', 'order']) &&
+             isValidUrl(data.videoUrl);
+    }
+
+    function isValidPurchase(data) {
+      return hasRequiredFields(['id', 'userId', 'courseId', 'amount', 'status', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.status in ['completed', 'failed', 'pending'] &&
+             data.createdAt == request.time;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(userId) && request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /courses/{courseId} {
+      allow read: if true; // Publicly readable
+      allow write: if isAdmin();
+      
+      match /lessons/{lessonId} {
+        allow read: if isAuthenticated(); // Authenticated users can see lesson list
+        allow write: if isAdmin();
+      }
+    }
+
+    match /purchases/{purchaseId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidPurchase(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
